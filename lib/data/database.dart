@@ -52,6 +52,9 @@ class LogEntries extends Table {
   RealColumn get quickKcal => real().nullable()();
   RealColumn get quickProtein => real().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  /// Number of lines when the recipe was logged; null for quick add.
+  IntColumn get originalLineCount => integer().nullable()();
 }
 
 /// Snapshot of a recipe line, including the ingredient's values at log time.
@@ -67,6 +70,9 @@ class LogLines extends Table {
   TextColumn get name => text()();
   TextColumn get unit => textEnum<Unit>()();
   RealColumn get amount => real()();
+
+  /// Amount when logged; null for a line added while editing.
+  RealColumn get originalAmount => real().nullable()();
   RealColumn get refAmount => real()();
   RealColumn get refKcal => real()();
   RealColumn get refProtein => real()();
@@ -135,11 +141,17 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'food_tracker'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(logEntries, logEntries.originalLineCount);
+        await m.addColumn(logLines, logLines.originalAmount);
+      }
+    },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),
   );
 
@@ -251,7 +263,7 @@ class AppDatabase extends _$AppDatabase {
   // ---------------------------------------------------------- log
 
   Stream<List<EntryView>> watchDay(String date) =>
-      _watch({logEntries, logLines, recipeLines}, () => _loadDay(date));
+      _watch({logEntries, logLines}, () => _loadDay(date));
 
   Future<List<EntryView>> _loadDay(String date) async {
     final entries =
@@ -268,34 +280,26 @@ class AppDatabase extends _$AppDatabase {
               ..where((l) => l.entryId.isIn(entries.map((e) => e.id)))
               ..orderBy([(l) => OrderingTerm(expression: l.id)]))
             .get();
-    final recipeIds = entries
-        .map((e) => e.sourceRecipeId)
-        .nonNulls
-        .toSet()
-        .toList();
-    final source = await _itemsByRecipe(recipeIds);
     return [
       for (final e in entries)
         () {
           final own = lines.where((l) => l.entryId == e.id).toList();
-          final rid = e.sourceRecipeId;
-          final edited =
-              rid != null &&
-              !_sameLines(own, source[rid] ?? const <RecipeItem>[]);
-          return EntryView(e, own, edited: edited);
+          return EntryView(e, own, edited: _isEdited(e, own));
         }(),
     ];
   }
 
-  static String _sig(int? ingredientId, double amount) =>
-      '$ingredientId@${amount.toStringAsFixed(4)}';
-
-  static bool _sameLines(List<LogLine> lines, List<RecipeItem> items) {
-    final a = lines.map((l) => _sig(l.ingredientId, l.amount)).toList()..sort();
-    final b = items.map((i) => _sig(i.ingredient.id, i.amount)).toList()
-      ..sort();
-    return a.length == b.length &&
-        Iterable.generate(a.length).every((i) => a[i] == b[i]);
+  /// Derived: the entry's lines differ from the snapshot taken when it was
+  /// logged. Later recipe edits never affect this.
+  static bool _isEdited(LogEntry e, List<LogLine> lines) {
+    final count = e.originalLineCount;
+    if (count == null) return false;
+    return lines.length != count ||
+        lines.any(
+          (l) =>
+              l.originalAmount == null ||
+              (l.amount - l.originalAmount!).abs() > 1e-9,
+        );
   }
 
   Future<int> _nextSortOrder(String date, Slot slot) async {
@@ -311,17 +315,23 @@ class AppDatabase extends _$AppDatabase {
     return (row.read(max) ?? -1) + 1;
   }
 
-  LogLinesCompanion _snapshot(int entryId, Ingredient ing, double amount) =>
-      LogLinesCompanion.insert(
-        entryId: entryId,
-        ingredientId: Value(ing.id),
-        name: ing.name,
-        unit: ing.unit,
-        amount: amount,
-        refAmount: ing.refAmount,
-        refKcal: ing.refKcal,
-        refProtein: ing.refProtein,
-      );
+  /// [original] marks the line as part of the logged snapshot.
+  LogLinesCompanion _snapshot(
+    int entryId,
+    Ingredient ing,
+    double amount, {
+    bool original = true,
+  }) => LogLinesCompanion.insert(
+    entryId: entryId,
+    ingredientId: Value(ing.id),
+    name: ing.name,
+    unit: ing.unit,
+    amount: amount,
+    originalAmount: Value(original ? amount : null),
+    refAmount: ing.refAmount,
+    refKcal: ing.refKcal,
+    refProtein: ing.refProtein,
+  );
 
   /// The snapshot rule: copy the recipe's lines and the ingredients' current
   /// values into the entry. From here on the two are independent.
@@ -340,6 +350,7 @@ class AppDatabase extends _$AppDatabase {
         name: r.name,
         sourceRecipeId: Value(recipeId),
         sortOrder: Value(await _nextSortOrder(date, slot)),
+        originalLineCount: Value(items.length),
       ),
     );
     await batch(
@@ -398,7 +409,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   Future<int> addLine(int entryId, Ingredient ing, double amount) =>
-      into(logLines).insert(_snapshot(entryId, ing, amount));
+      into(logLines).insert(_snapshot(entryId, ing, amount, original: false));
 
   Future<void> deleteLine(int lineId) =>
       (delete(logLines)..where((l) => l.id.equals(lineId))).go();
@@ -409,12 +420,16 @@ class AppDatabase extends _$AppDatabase {
     updates: {logLines},
   );
 
-  /// Re-copies the source recipe's current lines. The recipe is unchanged.
+  /// Re-copies the source recipe's current lines as a fresh snapshot.
+  /// The recipe is unchanged.
   Future<void> resetEntryToRecipe(int entryId) => transaction(() async {
     final e = await getEntry(entryId);
     if (e.sourceRecipeId == null) return;
     final items = await recipeItems(e.sourceRecipeId!);
     await (delete(logLines)..where((l) => l.entryId.equals(entryId))).go();
+    await (update(logEntries)..where((x) => x.id.equals(entryId))).write(
+      LogEntriesCompanion(originalLineCount: Value(items.length)),
+    );
     await batch(
       (b) => b.insertAll(logLines, [
         for (final i in items) _snapshot(entryId, i.ingredient, i.amount),
@@ -422,11 +437,17 @@ class AppDatabase extends _$AppDatabase {
     );
   });
 
-  /// Turns this entry's lines into a new recipe and links the entry to it.
+  /// Turns this entry's lines into a new recipe, links the entry to it and
+  /// makes the current lines its new snapshot.
   Future<int> saveEntryAsRecipe(int entryId, String name) =>
       transaction(() async {
         final e = await getEntry(entryId);
         final lines = await entryLines(entryId);
+        await customUpdate(
+          'UPDATE log_lines SET original_amount = amount WHERE entry_id = ?',
+          variables: [Variable.withInt(entryId)],
+          updates: {logLines},
+        );
         final rid = await saveRecipe(
           name: name,
           defaultSlot: e.slot,
@@ -436,7 +457,11 @@ class AppDatabase extends _$AppDatabase {
           ],
         );
         await (update(logEntries)..where((x) => x.id.equals(entryId))).write(
-          LogEntriesCompanion(name: Value(name), sourceRecipeId: Value(rid)),
+          LogEntriesCompanion(
+            name: Value(name),
+            sourceRecipeId: Value(rid),
+            originalLineCount: Value(lines.length),
+          ),
         );
         return rid;
       });

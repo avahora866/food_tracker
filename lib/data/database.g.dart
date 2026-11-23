@@ -1170,6 +1170,17 @@ class $LogEntriesTable extends LogEntries
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _originalLineCountMeta = const VerificationMeta(
+    'originalLineCount',
+  );
+  @override
+  late final GeneratedColumn<int> originalLineCount = GeneratedColumn<int>(
+    'original_line_count',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1180,6 +1191,7 @@ class $LogEntriesTable extends LogEntries
     quickKcal,
     quickProtein,
     sortOrder,
+    originalLineCount,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1242,6 +1254,15 @@ class $LogEntriesTable extends LogEntries
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('original_line_count')) {
+      context.handle(
+        _originalLineCountMeta,
+        originalLineCount.isAcceptableOrUnknown(
+          data['original_line_count']!,
+          _originalLineCountMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1285,6 +1306,10 @@ class $LogEntriesTable extends LogEntries
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      originalLineCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}original_line_count'],
+      ),
     );
   }
 
@@ -1310,6 +1335,9 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
   final double? quickKcal;
   final double? quickProtein;
   final int sortOrder;
+
+  /// Number of lines when the recipe was logged; null for quick add.
+  final int? originalLineCount;
   const LogEntry({
     required this.id,
     required this.date,
@@ -1319,6 +1347,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
     this.quickKcal,
     this.quickProtein,
     required this.sortOrder,
+    this.originalLineCount,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1341,6 +1370,9 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
       map['quick_protein'] = Variable<double>(quickProtein);
     }
     map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || originalLineCount != null) {
+      map['original_line_count'] = Variable<int>(originalLineCount);
+    }
     return map;
   }
 
@@ -1360,6 +1392,9 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
           ? const Value.absent()
           : Value(quickProtein),
       sortOrder: Value(sortOrder),
+      originalLineCount: originalLineCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalLineCount),
     );
   }
 
@@ -1379,6 +1414,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
       quickKcal: serializer.fromJson<double?>(json['quickKcal']),
       quickProtein: serializer.fromJson<double?>(json['quickProtein']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      originalLineCount: serializer.fromJson<int?>(json['originalLineCount']),
     );
   }
   @override
@@ -1395,6 +1431,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
       'quickKcal': serializer.toJson<double?>(quickKcal),
       'quickProtein': serializer.toJson<double?>(quickProtein),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'originalLineCount': serializer.toJson<int?>(originalLineCount),
     };
   }
 
@@ -1407,6 +1444,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
     Value<double?> quickKcal = const Value.absent(),
     Value<double?> quickProtein = const Value.absent(),
     int? sortOrder,
+    Value<int?> originalLineCount = const Value.absent(),
   }) => LogEntry(
     id: id ?? this.id,
     date: date ?? this.date,
@@ -1418,6 +1456,9 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
     quickKcal: quickKcal.present ? quickKcal.value : this.quickKcal,
     quickProtein: quickProtein.present ? quickProtein.value : this.quickProtein,
     sortOrder: sortOrder ?? this.sortOrder,
+    originalLineCount: originalLineCount.present
+        ? originalLineCount.value
+        : this.originalLineCount,
   );
   LogEntry copyWithCompanion(LogEntriesCompanion data) {
     return LogEntry(
@@ -1433,6 +1474,9 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
           ? data.quickProtein.value
           : this.quickProtein,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      originalLineCount: data.originalLineCount.present
+          ? data.originalLineCount.value
+          : this.originalLineCount,
     );
   }
 
@@ -1446,7 +1490,8 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
           ..write('sourceRecipeId: $sourceRecipeId, ')
           ..write('quickKcal: $quickKcal, ')
           ..write('quickProtein: $quickProtein, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('originalLineCount: $originalLineCount')
           ..write(')'))
         .toString();
   }
@@ -1461,6 +1506,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
     quickKcal,
     quickProtein,
     sortOrder,
+    originalLineCount,
   );
   @override
   bool operator ==(Object other) =>
@@ -1473,7 +1519,8 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
           other.sourceRecipeId == this.sourceRecipeId &&
           other.quickKcal == this.quickKcal &&
           other.quickProtein == this.quickProtein &&
-          other.sortOrder == this.sortOrder);
+          other.sortOrder == this.sortOrder &&
+          other.originalLineCount == this.originalLineCount);
 }
 
 class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
@@ -1485,6 +1532,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
   final Value<double?> quickKcal;
   final Value<double?> quickProtein;
   final Value<int> sortOrder;
+  final Value<int?> originalLineCount;
   const LogEntriesCompanion({
     this.id = const Value.absent(),
     this.date = const Value.absent(),
@@ -1494,6 +1542,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     this.quickKcal = const Value.absent(),
     this.quickProtein = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.originalLineCount = const Value.absent(),
   });
   LogEntriesCompanion.insert({
     this.id = const Value.absent(),
@@ -1504,6 +1553,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     this.quickKcal = const Value.absent(),
     this.quickProtein = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.originalLineCount = const Value.absent(),
   }) : date = Value(date),
        slot = Value(slot),
        name = Value(name);
@@ -1516,6 +1566,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     Expression<double>? quickKcal,
     Expression<double>? quickProtein,
     Expression<int>? sortOrder,
+    Expression<int>? originalLineCount,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1526,6 +1577,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
       if (quickKcal != null) 'quick_kcal': quickKcal,
       if (quickProtein != null) 'quick_protein': quickProtein,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (originalLineCount != null) 'original_line_count': originalLineCount,
     });
   }
 
@@ -1538,6 +1590,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     Value<double?>? quickKcal,
     Value<double?>? quickProtein,
     Value<int>? sortOrder,
+    Value<int?>? originalLineCount,
   }) {
     return LogEntriesCompanion(
       id: id ?? this.id,
@@ -1548,6 +1601,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
       quickKcal: quickKcal ?? this.quickKcal,
       quickProtein: quickProtein ?? this.quickProtein,
       sortOrder: sortOrder ?? this.sortOrder,
+      originalLineCount: originalLineCount ?? this.originalLineCount,
     );
   }
 
@@ -1580,6 +1634,9 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (originalLineCount.present) {
+      map['original_line_count'] = Variable<int>(originalLineCount.value);
+    }
     return map;
   }
 
@@ -1593,7 +1650,8 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
           ..write('sourceRecipeId: $sourceRecipeId, ')
           ..write('quickKcal: $quickKcal, ')
           ..write('quickProtein: $quickProtein, ')
-          ..write('sortOrder: $sortOrder')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('originalLineCount: $originalLineCount')
           ..write(')'))
         .toString();
   }
@@ -1672,6 +1730,17 @@ class $LogLinesTable extends LogLines with TableInfo<$LogLinesTable, LogLine> {
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _originalAmountMeta = const VerificationMeta(
+    'originalAmount',
+  );
+  @override
+  late final GeneratedColumn<double> originalAmount = GeneratedColumn<double>(
+    'original_amount',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _refAmountMeta = const VerificationMeta(
     'refAmount',
   );
@@ -1713,6 +1782,7 @@ class $LogLinesTable extends LogLines with TableInfo<$LogLinesTable, LogLine> {
     name,
     unit,
     amount,
+    originalAmount,
     refAmount,
     refKcal,
     refProtein,
@@ -1764,6 +1834,15 @@ class $LogLinesTable extends LogLines with TableInfo<$LogLinesTable, LogLine> {
       );
     } else if (isInserting) {
       context.missing(_amountMeta);
+    }
+    if (data.containsKey('original_amount')) {
+      context.handle(
+        _originalAmountMeta,
+        originalAmount.isAcceptableOrUnknown(
+          data['original_amount']!,
+          _originalAmountMeta,
+        ),
+      );
     }
     if (data.containsKey('ref_amount')) {
       context.handle(
@@ -1824,6 +1903,10 @@ class $LogLinesTable extends LogLines with TableInfo<$LogLinesTable, LogLine> {
         DriftSqlType.double,
         data['${effectivePrefix}amount'],
       )!,
+      originalAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}original_amount'],
+      ),
       refAmount: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}ref_amount'],
@@ -1855,6 +1938,9 @@ class LogLine extends DataClass implements Insertable<LogLine> {
   final String name;
   final Unit unit;
   final double amount;
+
+  /// Amount when logged; null for a line added while editing.
+  final double? originalAmount;
   final double refAmount;
   final double refKcal;
   final double refProtein;
@@ -1865,6 +1951,7 @@ class LogLine extends DataClass implements Insertable<LogLine> {
     required this.name,
     required this.unit,
     required this.amount,
+    this.originalAmount,
     required this.refAmount,
     required this.refKcal,
     required this.refProtein,
@@ -1882,6 +1969,9 @@ class LogLine extends DataClass implements Insertable<LogLine> {
       map['unit'] = Variable<String>($LogLinesTable.$converterunit.toSql(unit));
     }
     map['amount'] = Variable<double>(amount);
+    if (!nullToAbsent || originalAmount != null) {
+      map['original_amount'] = Variable<double>(originalAmount);
+    }
     map['ref_amount'] = Variable<double>(refAmount);
     map['ref_kcal'] = Variable<double>(refKcal);
     map['ref_protein'] = Variable<double>(refProtein);
@@ -1898,6 +1988,9 @@ class LogLine extends DataClass implements Insertable<LogLine> {
       name: Value(name),
       unit: Value(unit),
       amount: Value(amount),
+      originalAmount: originalAmount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalAmount),
       refAmount: Value(refAmount),
       refKcal: Value(refKcal),
       refProtein: Value(refProtein),
@@ -1918,6 +2011,7 @@ class LogLine extends DataClass implements Insertable<LogLine> {
         serializer.fromJson<String>(json['unit']),
       ),
       amount: serializer.fromJson<double>(json['amount']),
+      originalAmount: serializer.fromJson<double?>(json['originalAmount']),
       refAmount: serializer.fromJson<double>(json['refAmount']),
       refKcal: serializer.fromJson<double>(json['refKcal']),
       refProtein: serializer.fromJson<double>(json['refProtein']),
@@ -1935,6 +2029,7 @@ class LogLine extends DataClass implements Insertable<LogLine> {
         $LogLinesTable.$converterunit.toJson(unit),
       ),
       'amount': serializer.toJson<double>(amount),
+      'originalAmount': serializer.toJson<double?>(originalAmount),
       'refAmount': serializer.toJson<double>(refAmount),
       'refKcal': serializer.toJson<double>(refKcal),
       'refProtein': serializer.toJson<double>(refProtein),
@@ -1948,6 +2043,7 @@ class LogLine extends DataClass implements Insertable<LogLine> {
     String? name,
     Unit? unit,
     double? amount,
+    Value<double?> originalAmount = const Value.absent(),
     double? refAmount,
     double? refKcal,
     double? refProtein,
@@ -1958,6 +2054,9 @@ class LogLine extends DataClass implements Insertable<LogLine> {
     name: name ?? this.name,
     unit: unit ?? this.unit,
     amount: amount ?? this.amount,
+    originalAmount: originalAmount.present
+        ? originalAmount.value
+        : this.originalAmount,
     refAmount: refAmount ?? this.refAmount,
     refKcal: refKcal ?? this.refKcal,
     refProtein: refProtein ?? this.refProtein,
@@ -1972,6 +2071,9 @@ class LogLine extends DataClass implements Insertable<LogLine> {
       name: data.name.present ? data.name.value : this.name,
       unit: data.unit.present ? data.unit.value : this.unit,
       amount: data.amount.present ? data.amount.value : this.amount,
+      originalAmount: data.originalAmount.present
+          ? data.originalAmount.value
+          : this.originalAmount,
       refAmount: data.refAmount.present ? data.refAmount.value : this.refAmount,
       refKcal: data.refKcal.present ? data.refKcal.value : this.refKcal,
       refProtein: data.refProtein.present
@@ -1989,6 +2091,7 @@ class LogLine extends DataClass implements Insertable<LogLine> {
           ..write('name: $name, ')
           ..write('unit: $unit, ')
           ..write('amount: $amount, ')
+          ..write('originalAmount: $originalAmount, ')
           ..write('refAmount: $refAmount, ')
           ..write('refKcal: $refKcal, ')
           ..write('refProtein: $refProtein')
@@ -2004,6 +2107,7 @@ class LogLine extends DataClass implements Insertable<LogLine> {
     name,
     unit,
     amount,
+    originalAmount,
     refAmount,
     refKcal,
     refProtein,
@@ -2018,6 +2122,7 @@ class LogLine extends DataClass implements Insertable<LogLine> {
           other.name == this.name &&
           other.unit == this.unit &&
           other.amount == this.amount &&
+          other.originalAmount == this.originalAmount &&
           other.refAmount == this.refAmount &&
           other.refKcal == this.refKcal &&
           other.refProtein == this.refProtein);
@@ -2030,6 +2135,7 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
   final Value<String> name;
   final Value<Unit> unit;
   final Value<double> amount;
+  final Value<double?> originalAmount;
   final Value<double> refAmount;
   final Value<double> refKcal;
   final Value<double> refProtein;
@@ -2040,6 +2146,7 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
     this.name = const Value.absent(),
     this.unit = const Value.absent(),
     this.amount = const Value.absent(),
+    this.originalAmount = const Value.absent(),
     this.refAmount = const Value.absent(),
     this.refKcal = const Value.absent(),
     this.refProtein = const Value.absent(),
@@ -2051,6 +2158,7 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
     required String name,
     required Unit unit,
     required double amount,
+    this.originalAmount = const Value.absent(),
     required double refAmount,
     required double refKcal,
     required double refProtein,
@@ -2068,6 +2176,7 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
     Expression<String>? name,
     Expression<String>? unit,
     Expression<double>? amount,
+    Expression<double>? originalAmount,
     Expression<double>? refAmount,
     Expression<double>? refKcal,
     Expression<double>? refProtein,
@@ -2079,6 +2188,7 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
       if (name != null) 'name': name,
       if (unit != null) 'unit': unit,
       if (amount != null) 'amount': amount,
+      if (originalAmount != null) 'original_amount': originalAmount,
       if (refAmount != null) 'ref_amount': refAmount,
       if (refKcal != null) 'ref_kcal': refKcal,
       if (refProtein != null) 'ref_protein': refProtein,
@@ -2092,6 +2202,7 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
     Value<String>? name,
     Value<Unit>? unit,
     Value<double>? amount,
+    Value<double?>? originalAmount,
     Value<double>? refAmount,
     Value<double>? refKcal,
     Value<double>? refProtein,
@@ -2103,6 +2214,7 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
       name: name ?? this.name,
       unit: unit ?? this.unit,
       amount: amount ?? this.amount,
+      originalAmount: originalAmount ?? this.originalAmount,
       refAmount: refAmount ?? this.refAmount,
       refKcal: refKcal ?? this.refKcal,
       refProtein: refProtein ?? this.refProtein,
@@ -2132,6 +2244,9 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
     if (amount.present) {
       map['amount'] = Variable<double>(amount.value);
     }
+    if (originalAmount.present) {
+      map['original_amount'] = Variable<double>(originalAmount.value);
+    }
     if (refAmount.present) {
       map['ref_amount'] = Variable<double>(refAmount.value);
     }
@@ -2153,6 +2268,7 @@ class LogLinesCompanion extends UpdateCompanion<LogLine> {
           ..write('name: $name, ')
           ..write('unit: $unit, ')
           ..write('amount: $amount, ')
+          ..write('originalAmount: $originalAmount, ')
           ..write('refAmount: $refAmount, ')
           ..write('refKcal: $refKcal, ')
           ..write('refProtein: $refProtein')
@@ -3407,6 +3523,7 @@ typedef $$LogEntriesTableCreateCompanionBuilder =
       Value<double?> quickKcal,
       Value<double?> quickProtein,
       Value<int> sortOrder,
+      Value<int?> originalLineCount,
     });
 typedef $$LogEntriesTableUpdateCompanionBuilder =
     LogEntriesCompanion Function({
@@ -3418,6 +3535,7 @@ typedef $$LogEntriesTableUpdateCompanionBuilder =
       Value<double?> quickKcal,
       Value<double?> quickProtein,
       Value<int> sortOrder,
+      Value<int?> originalLineCount,
     });
 
 final class $$LogEntriesTableReferences
@@ -3503,6 +3621,11 @@ class $$LogEntriesTableFilterComposer
 
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get originalLineCount => $composableBuilder(
+    column: $table.originalLineCount,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3599,6 +3722,11 @@ class $$LogEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get originalLineCount => $composableBuilder(
+    column: $table.originalLineCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$RecipesTableOrderingComposer get sourceRecipeId {
     final $$RecipesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -3654,6 +3782,11 @@ class $$LogEntriesTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<int> get originalLineCount => $composableBuilder(
+    column: $table.originalLineCount,
+    builder: (column) => column,
+  );
 
   $$RecipesTableAnnotationComposer get sourceRecipeId {
     final $$RecipesTableAnnotationComposer composer = $composerBuilder(
@@ -3740,6 +3873,7 @@ class $$LogEntriesTableTableManager
                 Value<double?> quickKcal = const Value.absent(),
                 Value<double?> quickProtein = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<int?> originalLineCount = const Value.absent(),
               }) => LogEntriesCompanion(
                 id: id,
                 date: date,
@@ -3749,6 +3883,7 @@ class $$LogEntriesTableTableManager
                 quickKcal: quickKcal,
                 quickProtein: quickProtein,
                 sortOrder: sortOrder,
+                originalLineCount: originalLineCount,
               ),
           createCompanionCallback:
               ({
@@ -3760,6 +3895,7 @@ class $$LogEntriesTableTableManager
                 Value<double?> quickKcal = const Value.absent(),
                 Value<double?> quickProtein = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<int?> originalLineCount = const Value.absent(),
               }) => LogEntriesCompanion.insert(
                 id: id,
                 date: date,
@@ -3769,6 +3905,7 @@ class $$LogEntriesTableTableManager
                 quickKcal: quickKcal,
                 quickProtein: quickProtein,
                 sortOrder: sortOrder,
+                originalLineCount: originalLineCount,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -3868,6 +4005,7 @@ typedef $$LogLinesTableCreateCompanionBuilder =
       required String name,
       required Unit unit,
       required double amount,
+      Value<double?> originalAmount,
       required double refAmount,
       required double refKcal,
       required double refProtein,
@@ -3880,6 +4018,7 @@ typedef $$LogLinesTableUpdateCompanionBuilder =
       Value<String> name,
       Value<Unit> unit,
       Value<double> amount,
+      Value<double?> originalAmount,
       Value<double> refAmount,
       Value<double> refKcal,
       Value<double> refProtein,
@@ -3951,6 +4090,11 @@ class $$LogLinesTableFilterComposer
 
   ColumnFilters<double> get amount => $composableBuilder(
     column: $table.amount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get originalAmount => $composableBuilder(
+    column: $table.originalAmount,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4045,6 +4189,11 @@ class $$LogLinesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get originalAmount => $composableBuilder(
+    column: $table.originalAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get refAmount => $composableBuilder(
     column: $table.refAmount,
     builder: (column) => ColumnOrderings(column),
@@ -4127,6 +4276,11 @@ class $$LogLinesTableAnnotationComposer
 
   GeneratedColumn<double> get amount =>
       $composableBuilder(column: $table.amount, builder: (column) => column);
+
+  GeneratedColumn<double> get originalAmount => $composableBuilder(
+    column: $table.originalAmount,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<double> get refAmount =>
       $composableBuilder(column: $table.refAmount, builder: (column) => column);
@@ -4220,6 +4374,7 @@ class $$LogLinesTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<Unit> unit = const Value.absent(),
                 Value<double> amount = const Value.absent(),
+                Value<double?> originalAmount = const Value.absent(),
                 Value<double> refAmount = const Value.absent(),
                 Value<double> refKcal = const Value.absent(),
                 Value<double> refProtein = const Value.absent(),
@@ -4230,6 +4385,7 @@ class $$LogLinesTableTableManager
                 name: name,
                 unit: unit,
                 amount: amount,
+                originalAmount: originalAmount,
                 refAmount: refAmount,
                 refKcal: refKcal,
                 refProtein: refProtein,
@@ -4242,6 +4398,7 @@ class $$LogLinesTableTableManager
                 required String name,
                 required Unit unit,
                 required double amount,
+                Value<double?> originalAmount = const Value.absent(),
                 required double refAmount,
                 required double refKcal,
                 required double refProtein,
@@ -4252,6 +4409,7 @@ class $$LogLinesTableTableManager
                 name: name,
                 unit: unit,
                 amount: amount,
+                originalAmount: originalAmount,
                 refAmount: refAmount,
                 refKcal: refKcal,
                 refProtein: refProtein,

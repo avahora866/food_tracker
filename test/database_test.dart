@@ -113,4 +113,21 @@ void main() {
     expect(view.entry.sourceRecipeId, rid);
     expect(view.edited, isFalse);
   });
+
+  test('edited compares against the logged snapshot, not the recipe', () async {
+    final id = await db.addRecipeToDay(oatmeal, day, Slot.breakfast);
+    await db.saveRecipe(id: oatmeal, name: 'Oatmeal', lines: [(oats, 80)]);
+    expect((await only()).edited, isFalse);
+
+    final milkLine = (await only()).lines.firstWhere((l) => l.name == 'Milk');
+    await db.deleteLine(milkLine.id);
+    expect((await only()).edited, isTrue, reason: 'line removed');
+
+    await db.resetEntryToRecipe(id);
+    expect((await only()).edited, isFalse, reason: 'reset is a new snapshot');
+
+    final ing = (await db.watchIngredients().first).first;
+    await db.addLine(id, ing, 10);
+    expect((await only()).edited, isTrue, reason: 'line added');
+  });
 }
