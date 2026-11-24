@@ -89,6 +89,17 @@ class $IngredientsTable extends Ingredients
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _lastUsedAtMeta = const VerificationMeta(
+    'lastUsedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastUsedAt = GeneratedColumn<DateTime>(
+    'last_used_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -98,6 +109,7 @@ class $IngredientsTable extends Ingredients
     refKcal,
     refProtein,
     archived,
+    lastUsedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -150,6 +162,15 @@ class $IngredientsTable extends Ingredients
         archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
       );
     }
+    if (data.containsKey('last_used_at')) {
+      context.handle(
+        _lastUsedAtMeta,
+        lastUsedAt.isAcceptableOrUnknown(
+          data['last_used_at']!,
+          _lastUsedAtMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -189,6 +210,10 @@ class $IngredientsTable extends Ingredients
         DriftSqlType.bool,
         data['${effectivePrefix}archived'],
       )!,
+      lastUsedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_used_at'],
+      ),
     );
   }
 
@@ -209,6 +234,9 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
   final double refKcal;
   final double refProtein;
   final bool archived;
+
+  /// Recents-first ordering when an ingredient is logged on its own.
+  final DateTime? lastUsedAt;
   const Ingredient({
     required this.id,
     required this.name,
@@ -217,6 +245,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     required this.refKcal,
     required this.refProtein,
     required this.archived,
+    this.lastUsedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -232,6 +261,9 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     map['ref_kcal'] = Variable<double>(refKcal);
     map['ref_protein'] = Variable<double>(refProtein);
     map['archived'] = Variable<bool>(archived);
+    if (!nullToAbsent || lastUsedAt != null) {
+      map['last_used_at'] = Variable<DateTime>(lastUsedAt);
+    }
     return map;
   }
 
@@ -244,6 +276,9 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
       refKcal: Value(refKcal),
       refProtein: Value(refProtein),
       archived: Value(archived),
+      lastUsedAt: lastUsedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastUsedAt),
     );
   }
 
@@ -262,6 +297,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
       refKcal: serializer.fromJson<double>(json['refKcal']),
       refProtein: serializer.fromJson<double>(json['refProtein']),
       archived: serializer.fromJson<bool>(json['archived']),
+      lastUsedAt: serializer.fromJson<DateTime?>(json['lastUsedAt']),
     );
   }
   @override
@@ -277,6 +313,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
       'refKcal': serializer.toJson<double>(refKcal),
       'refProtein': serializer.toJson<double>(refProtein),
       'archived': serializer.toJson<bool>(archived),
+      'lastUsedAt': serializer.toJson<DateTime?>(lastUsedAt),
     };
   }
 
@@ -288,6 +325,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     double? refKcal,
     double? refProtein,
     bool? archived,
+    Value<DateTime?> lastUsedAt = const Value.absent(),
   }) => Ingredient(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -296,6 +334,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     refKcal: refKcal ?? this.refKcal,
     refProtein: refProtein ?? this.refProtein,
     archived: archived ?? this.archived,
+    lastUsedAt: lastUsedAt.present ? lastUsedAt.value : this.lastUsedAt,
   );
   Ingredient copyWithCompanion(IngredientsCompanion data) {
     return Ingredient(
@@ -308,6 +347,9 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
           ? data.refProtein.value
           : this.refProtein,
       archived: data.archived.present ? data.archived.value : this.archived,
+      lastUsedAt: data.lastUsedAt.present
+          ? data.lastUsedAt.value
+          : this.lastUsedAt,
     );
   }
 
@@ -320,14 +362,23 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
           ..write('refAmount: $refAmount, ')
           ..write('refKcal: $refKcal, ')
           ..write('refProtein: $refProtein, ')
-          ..write('archived: $archived')
+          ..write('archived: $archived, ')
+          ..write('lastUsedAt: $lastUsedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, unit, refAmount, refKcal, refProtein, archived);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    unit,
+    refAmount,
+    refKcal,
+    refProtein,
+    archived,
+    lastUsedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -338,7 +389,8 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
           other.refAmount == this.refAmount &&
           other.refKcal == this.refKcal &&
           other.refProtein == this.refProtein &&
-          other.archived == this.archived);
+          other.archived == this.archived &&
+          other.lastUsedAt == this.lastUsedAt);
 }
 
 class IngredientsCompanion extends UpdateCompanion<Ingredient> {
@@ -349,6 +401,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
   final Value<double> refKcal;
   final Value<double> refProtein;
   final Value<bool> archived;
+  final Value<DateTime?> lastUsedAt;
   const IngredientsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -357,6 +410,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     this.refKcal = const Value.absent(),
     this.refProtein = const Value.absent(),
     this.archived = const Value.absent(),
+    this.lastUsedAt = const Value.absent(),
   });
   IngredientsCompanion.insert({
     this.id = const Value.absent(),
@@ -366,6 +420,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     required double refKcal,
     this.refProtein = const Value.absent(),
     this.archived = const Value.absent(),
+    this.lastUsedAt = const Value.absent(),
   }) : name = Value(name),
        unit = Value(unit),
        refAmount = Value(refAmount),
@@ -378,6 +433,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     Expression<double>? refKcal,
     Expression<double>? refProtein,
     Expression<bool>? archived,
+    Expression<DateTime>? lastUsedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -387,6 +443,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
       if (refKcal != null) 'ref_kcal': refKcal,
       if (refProtein != null) 'ref_protein': refProtein,
       if (archived != null) 'archived': archived,
+      if (lastUsedAt != null) 'last_used_at': lastUsedAt,
     });
   }
 
@@ -398,6 +455,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     Value<double>? refKcal,
     Value<double>? refProtein,
     Value<bool>? archived,
+    Value<DateTime?>? lastUsedAt,
   }) {
     return IngredientsCompanion(
       id: id ?? this.id,
@@ -407,6 +465,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
       refKcal: refKcal ?? this.refKcal,
       refProtein: refProtein ?? this.refProtein,
       archived: archived ?? this.archived,
+      lastUsedAt: lastUsedAt ?? this.lastUsedAt,
     );
   }
 
@@ -436,6 +495,9 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     if (archived.present) {
       map['archived'] = Variable<bool>(archived.value);
     }
+    if (lastUsedAt.present) {
+      map['last_used_at'] = Variable<DateTime>(lastUsedAt.value);
+    }
     return map;
   }
 
@@ -448,7 +510,8 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
           ..write('refAmount: $refAmount, ')
           ..write('refKcal: $refKcal, ')
           ..write('refProtein: $refProtein, ')
-          ..write('archived: $archived')
+          ..write('archived: $archived, ')
+          ..write('lastUsedAt: $lastUsedAt')
           ..write(')'))
         .toString();
   }
@@ -2338,6 +2401,7 @@ typedef $$IngredientsTableCreateCompanionBuilder =
       required double refKcal,
       Value<double> refProtein,
       Value<bool> archived,
+      Value<DateTime?> lastUsedAt,
     });
 typedef $$IngredientsTableUpdateCompanionBuilder =
     IngredientsCompanion Function({
@@ -2348,6 +2412,7 @@ typedef $$IngredientsTableUpdateCompanionBuilder =
       Value<double> refKcal,
       Value<double> refProtein,
       Value<bool> archived,
+      Value<DateTime?> lastUsedAt,
     });
 
 final class $$IngredientsTableReferences
@@ -2434,6 +2499,11 @@ class $$IngredientsTableFilterComposer
 
   ColumnFilters<bool> get archived => $composableBuilder(
     column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2531,6 +2601,11 @@ class $$IngredientsTableOrderingComposer
     column: $table.archived,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$IngredientsTableAnnotationComposer
@@ -2564,6 +2639,11 @@ class $$IngredientsTableAnnotationComposer
 
   GeneratedColumn<bool> get archived =>
       $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
+    builder: (column) => column,
+  );
 
   Expression<T> recipeLinesRefs<T extends Object>(
     Expression<T> Function($$RecipeLinesTableAnnotationComposer a) f,
@@ -2651,6 +2731,7 @@ class $$IngredientsTableTableManager
                 Value<double> refKcal = const Value.absent(),
                 Value<double> refProtein = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
+                Value<DateTime?> lastUsedAt = const Value.absent(),
               }) => IngredientsCompanion(
                 id: id,
                 name: name,
@@ -2659,6 +2740,7 @@ class $$IngredientsTableTableManager
                 refKcal: refKcal,
                 refProtein: refProtein,
                 archived: archived,
+                lastUsedAt: lastUsedAt,
               ),
           createCompanionCallback:
               ({
@@ -2669,6 +2751,7 @@ class $$IngredientsTableTableManager
                 required double refKcal,
                 Value<double> refProtein = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
+                Value<DateTime?> lastUsedAt = const Value.absent(),
               }) => IngredientsCompanion.insert(
                 id: id,
                 name: name,
@@ -2677,6 +2760,7 @@ class $$IngredientsTableTableManager
                 refKcal: refKcal,
                 refProtein: refProtein,
                 archived: archived,
+                lastUsedAt: lastUsedAt,
               ),
           withReferenceMapper: (p0) => p0
               .map(

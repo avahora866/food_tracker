@@ -130,4 +130,38 @@ void main() {
     await db.addLine(id, ing, 10);
     expect((await only()).edited, isTrue, reason: 'line added');
   });
+
+  test('piece/cup ingredients can be logged on their own', () async {
+    final coffee = await db.saveIngredient(
+      IngredientsCompanion.insert(
+        name: 'Starbucks latte',
+        unit: Unit.piece,
+        refAmount: 1,
+        refKcal: 190,
+        refProtein: const Value(12),
+      ),
+    );
+    await db.addIngredientToDay(coffee, day, Slot.snack);
+    var e = await only();
+    expect(e.entry.name, 'Starbucks latte');
+    expect(e.entry.sourceRecipeId, isNull);
+    expect(e.total.kcal, 190);
+    expect(e.edited, isFalse);
+    expect(
+      (await db.watchIngredients().first)
+          .firstWhere((i) => i.id == coffee)
+          .lastUsedAt,
+      isNotNull,
+    );
+
+    await db.updateLineAmount(e.lines.single.id, 2);
+    e = await only();
+    expect(e.total.kcal, 380);
+    expect(e.edited, isTrue);
+
+    expect(
+      () => db.addIngredientToDay(oats, day, Slot.snack),
+      throwsArgumentError,
+    );
+  });
 }

@@ -17,6 +17,9 @@ class Ingredients extends Table {
   RealColumn get refKcal => real()();
   RealColumn get refProtein => real().withDefault(const Constant(0))();
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
+
+  /// Recents-first ordering when an ingredient is logged on its own.
+  DateTimeColumn get lastUsedAt => dateTime().nullable()();
 }
 
 class Recipes extends Table {
@@ -81,6 +84,9 @@ class LogLines extends Table {
 // ---------------------------------------------------------------- views
 
 extension IngredientNutr on Ingredient {
+  /// Only counted units can be logged on their own: one tap = one piece/cup.
+  bool get loggableAlone => unit == Unit.piece || unit == Unit.cup;
+
   Nutr nutrFor(double amount) => Nutr.line(
     amount: amount,
     refAmount: refAmount,
@@ -141,7 +147,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'food_tracker'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -150,6 +156,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await m.addColumn(logEntries, logEntries.originalLineCount);
         await m.addColumn(logLines, logLines.originalAmount);
+      }
+      if (from < 3) {
+        await m.addColumn(ingredients, ingredients.lastUsedAt);
       }
     },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),
@@ -360,6 +369,36 @@ class AppDatabase extends _$AppDatabase {
     );
     await (update(recipes)..where((x) => x.id.equals(recipeId))).write(
       RecipesCompanion(lastUsedAt: Value(now ?? DateTime.now())),
+    );
+    return id;
+  });
+
+  /// Logs one piece or cup of an ingredient as an entry with a single line
+  /// and no source recipe.
+  Future<int> addIngredientToDay(
+    int ingredientId,
+    String date,
+    Slot slot, {
+    DateTime? now,
+  }) => transaction(() async {
+    final ing = await (select(
+      ingredients,
+    )..where((i) => i.id.equals(ingredientId))).getSingle();
+    if (!ing.loggableAlone) {
+      throw ArgumentError('Only piece or cup ingredients can be logged alone');
+    }
+    final id = await into(logEntries).insert(
+      LogEntriesCompanion.insert(
+        date: date,
+        slot: slot,
+        name: ing.name,
+        sortOrder: Value(await _nextSortOrder(date, slot)),
+        originalLineCount: const Value(1),
+      ),
+    );
+    await into(logLines).insert(_snapshot(id, ing, 1));
+    await (update(ingredients)..where((i) => i.id.equals(ingredientId))).write(
+      IngredientsCompanion(lastUsedAt: Value(now ?? DateTime.now())),
     );
     return id;
   });

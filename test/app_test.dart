@@ -64,4 +64,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Oatmeal'), findsOneWidget);
   });
+
+  testWidgets('picker offers piece/cup ingredients but not weighed ones', (
+    tester,
+  ) async {
+    final db = AppDatabase(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    addTearDown(db.close);
+    await tester.runAsync(() async {
+      await db.saveIngredient(
+        IngredientsCompanion.insert(
+          name: 'Oats',
+          unit: Unit.g,
+          refAmount: 100,
+          refKcal: 389,
+        ),
+      );
+      await db.saveIngredient(
+        IngredientsCompanion.insert(
+          name: 'Latte',
+          unit: Unit.piece,
+          refAmount: 1,
+          refKcal: 190,
+          refProtein: const Value(12),
+        ),
+      );
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const FoodTrackerApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Add to Snack'));
+    await tester.pumpAndSettle();
+    expect(find.text('Oats'), findsNothing);
+    expect(find.text('1 piece'), findsOneWidget);
+    await tester.tap(find.text('Latte'));
+    await tester.pumpAndSettle();
+    expect(find.text('190 kcal · 12 g'), findsWidgets);
+  });
 }

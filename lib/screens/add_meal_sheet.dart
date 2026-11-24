@@ -35,28 +35,45 @@ class _AddMealSheetState extends ConsumerState<_AddMealSheet> {
   String _query = '';
 
   /// This slot's meals first, then most recently used, then by name.
-  List<RecipeSummary> _sorted(List<RecipeSummary> all) {
+  List<_Pickable> _sorted(List<_Pickable> all) {
     final q = _query.toLowerCase();
-    int slotRank(Recipe r) => r.defaultSlot == widget.slot ? 0 : 1;
-    return all.where((s) => s.recipe.name.toLowerCase().contains(q)).toList()
+    return all.where((p) => p.name.toLowerCase().contains(q)).toList()
       ..sort((a, b) {
-        final ra = a.recipe, rb = b.recipe;
-        final bySlot = slotRank(ra).compareTo(slotRank(rb));
+        final bySlot = a.slotRank.compareTo(b.slotRank);
         if (bySlot != 0) return bySlot;
-        final ta = ra.lastUsedAt, tb = rb.lastUsedAt;
+        final ta = a.lastUsedAt, tb = b.lastUsedAt;
         if (ta != tb) {
           if (ta == null) return 1;
           if (tb == null) return -1;
           return tb.compareTo(ta);
         }
-        return ra.name.toLowerCase().compareTo(rb.name.toLowerCase());
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
   }
 
   @override
   Widget build(BuildContext context) {
     final db = ref.read(databaseProvider);
-    final recipes = _sorted(ref.watch(recipesProvider).value ?? []);
+    final items = _sorted([
+      for (final r in ref.watch(recipesProvider).value ?? <RecipeSummary>[])
+        _Pickable(
+          name: r.recipe.name,
+          kcal: r.total.kcal,
+          lastUsedAt: r.recipe.lastUsedAt,
+          slotRank: r.recipe.defaultSlot == widget.slot ? 0 : 1,
+          add: () => db.addRecipeToDay(r.recipe.id, widget.day, widget.slot),
+        ),
+      for (final i in ref.watch(ingredientsProvider).value ?? <Ingredient>[])
+        if (i.loggableAlone)
+          _Pickable(
+            name: i.name,
+            unit: i.unit,
+            kcal: i.nutrFor(1).kcal,
+            lastUsedAt: i.lastUsedAt,
+            slotRank: 1,
+            add: () => db.addIngredientToDay(i.id, widget.day, widget.slot),
+          ),
+    ]);
 
     return Column(
       children: [
@@ -102,20 +119,19 @@ class _AddMealSheetState extends ConsumerState<_AddMealSheet> {
         Expanded(
           child: ListView(
             children: [
-              for (final s in recipes)
+              for (final p in items)
                 ListTile(
-                  title: Text(s.recipe.name),
+                  title: Text(p.name),
+                  subtitle: p.unit == null
+                      ? null
+                      : Text('1 ${p.unit!.name}', style: mutedStyle(context)),
                   trailing: Text(
-                    '${s.total.kcal.round()} kcal',
+                    '${p.kcal.round()} kcal',
                     style: mutedStyle(context),
                   ),
                   onTap: () async {
                     final nav = Navigator.of(context);
-                    await db.addRecipeToDay(
-                      s.recipe.id,
-                      widget.day,
-                      widget.slot,
-                    );
+                    await p.add();
                     nav.pop();
                   },
                 ),
@@ -125,4 +141,25 @@ class _AddMealSheetState extends ConsumerState<_AddMealSheet> {
       ],
     );
   }
+}
+
+/// A row in the picker: a saved meal, or a piece/cup ingredient logged alone.
+class _Pickable {
+  _Pickable({
+    required this.name,
+    required this.kcal,
+    required this.lastUsedAt,
+    required this.slotRank,
+    required this.add,
+    this.unit,
+  });
+
+  final String name;
+  final double kcal;
+  final DateTime? lastUsedAt;
+  final int slotRank;
+  final Future<void> Function() add;
+
+  /// Set for ingredients only.
+  final Unit? unit;
 }
