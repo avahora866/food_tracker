@@ -1,7 +1,41 @@
 import 'package:flutter/material.dart';
 
-void main() {
+import 'weight/weight_reminder_service.dart';
+import 'weight/weight_repository.dart';
+import 'weight/weight_screen.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
+final weightRepository = WeightRepository();
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
+  await _setUpWeightReminders();
+}
+
+Future<void> _setUpWeightReminders() async {
+  try {
+    final reminders = WeightReminderService.instance;
+    await reminders.init(onOpen: openWeightScreen);
+    await reminders.reschedule(await weightRepository.load());
+  } catch (e, s) {
+    debugPrint('Failed to set up weight reminders: $e\n$s');
+  }
+}
+
+/// Opens the weight screen on top of the home screen.
+void openWeightScreen() {
+  final nav = navigatorKey.currentState;
+  if (nav == null) return;
+  nav.popUntil((route) => route.isFirst);
+  nav.push(
+    MaterialPageRoute<void>(
+      builder: (_) => WeightScreen(
+        repository: weightRepository,
+        onChanged: WeightReminderService.instance.reschedule,
+      ),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -11,6 +45,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Flutter Demo',
       theme: ThemeData(
         // This is the theme of your application.
@@ -84,6 +119,13 @@ class _MyHomePageState extends State<MyHomePage> {
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.monitor_weight_outlined),
+            tooltip: 'Weight',
+            onPressed: openWeightScreen,
+          ),
+        ],
       ),
       body: Center(
         // Center is a layout widget. It takes a single child and positions it
